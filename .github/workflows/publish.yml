@@ -15,7 +15,7 @@ jobs:
       - name: Publish Script
         shell: pwsh
         env:
-          PSGALLERY_KEY: ${{ secrets.PSGALLERY_API }}
+          PSGALLERY_KEY: ${{ secrets.PSGALLERY_API_KEY }}
         run: |
           Write-Host "Key length: $($env:PSGALLERY_KEY.Length)"
           Install-Module PowerShellGet -Force -Scope CurrentUser
