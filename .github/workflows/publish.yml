@@ -19,6 +19,6 @@ jobs:
         run: |
           Write-Host "Key length: $($env:PSGALLERY_KEY.Length)"
           Install-Module PowerShellGet -Force -Scope CurrentUser
-          Publish-Script -Path "./installVsDevWithPwsh7.ps1" -NuGetApiKey $env:PSGALLERY_KEY
+          Publish-Script -Path "./Add-VsDevPwsh7.ps1" -NuGetApiKey $env:PSGALLERY_KEY
           
    
