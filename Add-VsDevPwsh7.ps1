@@ -2,7 +2,7 @@
 
 .VERSION 0.0.1
 
-.GUID a1b2c3d4-e5f6-7890-abcd-ef1234567890   # 用 [guid]::NewGuid().ToString() 生成
+.GUID af7c8e7f-7575-442b-a1ea-ca749eedd0d8
 
 .AUTHOR ScriptForge6
 
