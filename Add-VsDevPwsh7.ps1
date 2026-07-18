@@ -1,3 +1,36 @@
+<#PSScriptInfo
+
+.VERSION 1.0.0
+
+.GUID a1b2c3d4-e5f6-7890-abcd-ef1234567890   # 用 [guid]::NewGuid().ToString() 生成
+
+.AUTHOR ScriptForge6
+
+.COMPANYNAME ScriptForge
+
+.COPYRIGHT (c) 2026 ScriptForge6. All rights reserved.
+
+.TAGS VisualStudio, PowerShell7, Developer, Terminal
+
+.LICENSEURI https://github.com/ScriptForge6/Add-VsDevPwsh7/blob/master/LICENSE.txt
+
+.PROJECTURI https://github.com/ScriptForge6/Add-VsDevPwsh7
+
+.ICONURI 
+
+.EXTERNALMODULEDEPENDENCIES 
+
+.REQUIREDSCRIPTS 
+
+.EXTERNALSCRIPTDEPENDENCIES 
+
+.RELEASENOTES
+Initial release. Auto-detect Visual Studio via vswhere, generate PowerShell 7 startup script with full build environment.
+
+.PRIVATEDATA
+
+#>
+
 <#
 .SYNOPSIS
 Auto PS5.1 Script: PowerShell 7 Developer Terminal for Visual Studio (Win10/11 Only)
