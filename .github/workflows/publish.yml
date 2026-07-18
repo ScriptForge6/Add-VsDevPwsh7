@@ -1,0 +1,19 @@
+name: Publish to PSGallery
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Publish Script
+        shell: pwsh
+        env:
+          PSGALLERY_KEY: ${{ secrets.PS_GALLERY_API }}
+        run: |
+          Install-Module PowerShellGet -Force -Scope CurrentUser
+          Publish-Script -Path "./installVsDevWithPwsh7.ps1" -NuGetApiKey $env:PSGALLERY_KEY
