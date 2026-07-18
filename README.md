@@ -1,6 +1,6 @@
 <center>
 
-# installVsDevWithPwsh7
+# Add-VsDevPwsh7
 
 **Other Language:** [Chinese](README_CN.md)
 

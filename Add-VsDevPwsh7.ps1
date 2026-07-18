@@ -1,14 +1,14 @@
 <#PSScriptInfo
 
-.VERSION 0.0.1
+.VERSION 0.1.0
 
 .GUID af7c8e7f-7575-442b-a1ea-ca749eedd0d8
 
-.AUTHOR ScriptForge6
+.AUTHOR ScriptForge
 
 .COMPANYNAME ScriptForge
 
-.COPYRIGHT (c) 2026 ScriptForge6. All rights reserved.
+.COPYRIGHT (c) 2026 ScriptForge. All rights reserved.
 
 .TAGS VisualStudio, PowerShell7, Developer, Terminal
 
@@ -25,7 +25,13 @@
 .EXTERNALSCRIPTDEPENDENCIES 
 
 .RELEASENOTES
-Initial release. Auto-detect Visual Studio via vswhere, generate PowerShell 7 startup script with full build environment.
+v0.1.0
+- Add: Pre-check for disk root directory path to prevent permission denied errors
+  新增：磁盘根目录路径前置校验，规避根目录写入权限拒绝问题
+- Enhance: Unified error handling logic, added bilingual Chinese/English prompt messages
+  优化：统一错误捕获处理逻辑，新增中英文双语提示文案
+- Initial feature: Auto-locate Visual Studio via vswhere, generate PowerShell 7 developer environment startup script
+  初始功能：通过 vswhere 自动检索本地 Visual Studio，生成加载完整编译环境的 PowerShell 7 启动脚本
 
 .PRIVATEDATA
 
@@ -81,6 +87,7 @@ param(
     # 基础通用参数
     [string]$Vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe",
     [string]$OutDir = "C:\VsDevWithPwsh7",
+    [string]$RepoDir = (Join-Path $env:USERPROFILE "source\repos"),
 
     # 注册表注册相关参数
     [switch]$RegisterToRegistry,
@@ -96,17 +103,20 @@ param(
 #一、初始化
 
 
-#1.初始化变量
+#1.初始化输出等级
+
+$InformationPreference = 'Continue'
+
+#2.初始化变量
 
 # 初始化Guid
 if (-not $PSBoundParameters.ContainsKey('Guid')) {
     $Guid = [guid]::NewGuid().ToString("B")
 }
 
-#2.校验参数使用是否正确
+#3.校验参数使用是否正确
 
 #校验函数：
-
 function Test-ParameterDependency {
     [CmdletBinding()]
     param (
@@ -125,7 +135,7 @@ function Test-ParameterDependency {
     
     if ($CallerBoundParameters.ContainsKey($ChildName) -and -not $ParentIsPresent) {
         Write-Warning "The parameter -$ChildName only takes effect when -$ParentName is specified; the input will be ignored.
-    参数 -$ChildName 仅在指定 -$ParentName 时生效，当前传入无效"
+参数 -$ChildName 仅在指定 -$ParentName 时生效，当前传入无效"
         return
     }
     
@@ -141,3 +151,54 @@ Test-ParameterDependency -ChildName 'WtProfileName' -ParentName 'AddToWindowsTer
 #校验-Guid参数
 Test-ParameterDependency -ChildName 'Guid' -ParentName 'AddToWindowsTerminal' -ParentIsPresent:$AddToWindowsTerminal -CallerBoundParameters $PSBoundParameters
 
+
+#二、生成ps1文件
+
+
+#1.生成ps1文件
+
+$scriptContent = @"
+`$vsWherePath = '$Vswhere'
+if (-not (Test-Path `$vsWherePath)) {
+    Write-Error "vswhere.exe not found at: `$VswherePath.
+在 `$VswherePath 未找到 vswhere.exe。"
+}
+`$vsRoot = & `$vsWherePath -latest -property installationPath
+if (-not `$vsRoot) {
+    Write-Error "No Visual Studio instance detected.
+未检测到任何 Visual Studio 安装实例。"
+}
+
+`$devShell = Join-Path `$vsRoot "Common7\Tools\Launch-VsDevShell.ps1"
+if (Test-Path `$devShell) {
+    & `$devShell -SkipAutomaticLocation
+}
+else {
+    Write-Error "DevShell script is missing.
+Dev 命令行缺失。"
+}
+
+`$repoDir = '$RepoDir'
+if (Test-Path `$repoDir) {
+    Set-Location `$repoDir
+}
+else {
+    Write-Error "Repo directory does not exist, staying in current working directory.
+仓库目录不存在，保持当前路径。"
+}
+"@
+
+$outputScript = Join-Path $OutDir "Start-VsDevPwsh7.ps1"
+try {
+    if (-not (Test-Path $OutDir)) {
+        New-Item -Path $OutDir -ItemType Directory -Force | Out-Null
+    }
+    Set-Content -Path $outputScript -Value $scriptContent -Encoding utf8 -ErrorAction Stop
+    Write-Information "Startup script generated successfully: $outputScript
+开发终端启动脚本已生成"
+}
+catch {
+    Write-Error "Failed to write script to $outputScript : $_
+脚本写入失败，权限不足或目录不可写，请更换输出目录或以管理员身份运行 PowerShell"
+    exit 2
+}

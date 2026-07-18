@@ -1,6 +1,6 @@
 <center>
 
-# installVsDevWithPwsh7
+# Add-VsDevPwsh7
 
 [README主版本(English)](README.md)
 
