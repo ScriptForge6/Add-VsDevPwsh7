@@ -4,6 +4,8 @@ on:
   release:
     types: [published]
 
+  workflow_dispatch:
+
 jobs:
   publish:
     runs-on: ubuntu-latest
@@ -13,7 +15,7 @@ jobs:
       - name: Publish Script
         shell: pwsh
         env:
-          PSGALLERY_KEY: ${{ secrets.PS_GALLERY_API }}
+          PSGALLERY_KEY: ${{ secrets.PSGALLERY_API }}
         run: |
           Install-Module PowerShellGet -Force -Scope CurrentUser
           Publish-Script -Path "./installVsDevWithPwsh7.ps1" -NuGetApiKey $env:PSGALLERY_KEY
