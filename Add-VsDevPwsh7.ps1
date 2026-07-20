@@ -25,18 +25,18 @@
 .EXTERNALSCRIPTDEPENDENCIES 
 
 .RELEASENOTES
-v0.1.3 (Emergency Patch)
-- Fix: Hardcoded default vswhere path judgment error, file exists but misjudged as missing
-- 紧急修复：硬编码默认vswhere路径判断异常，文件真实存在却误判缺失
-- Standardized exit codes remain unchanged:
-  1 = vswhere.exe file missing
-  2 = Output directory read/write permission denied
-- 退出码规范保持不变：
-  1 = 未找到vswhere.exe文件
-  2 = 输出目录读写权限不足
+v0.1.3 (Emergency Critical Patch)
+- Critical Bug Fix: Remove extra backtick escape character before $Vswhere, which caused variable to be parsed as literal string.
+- 关键紧急修复：删除 $Vswhere 前多余的反引号转义符，修复变量被识别为纯文本字符串的严重bug
+- Exit code specification unchanged:
+  1 = Specified vswhere.exe cannot be found
+  2 = Target output directory lacks read/write permissions
+- 退出码定义维持不变：
+  1 = 指定的vswhere.exe文件不存在
+  2 = 目标输出目录无读写权限
 
-Affected versions: v0.1.2, upgrade immediately
-受影响版本：v0.1.2，请立即升级
+Affected Version: v0.1.2, all users must upgrade urgently
+受影响版本：v0.1.2，所有用户请紧急升级
 
 .PRIVATEDATA
 
