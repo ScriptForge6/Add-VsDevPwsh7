@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 0.1.1
+.VERSION 0.1.2
 
 .GUID af7c8e7f-7575-442b-a1ea-ca749eedd0d8
 
@@ -25,13 +25,13 @@
 .EXTERNALSCRIPTDEPENDENCIES 
 
 .RELEASENOTES
-v0.1.0
-- Add: Pre-check for disk root directory path to prevent permission denied errors
-  新增：磁盘根目录路径前置校验，规避根目录写入权限拒绝问题
-- Enhance: Unified error handling logic, added bilingual Chinese/English prompt messages
-  优化：统一错误捕获处理逻辑，新增中英文双语提示文案
-- Initial feature: Auto-locate Visual Studio via vswhere, generate PowerShell 7 developer environment startup script
-  初始功能：通过 vswhere 自动检索本地 Visual Studio，生成加载完整编译环境的 PowerShell 7 启动脚本
+v0.1.2
+- Standardized script exit codes:
+  1 = Target file not found
+  2 = Insufficient read/write directory permissions
+- 标准化脚本退出码：
+  1 = 未找到指定文件
+  2 = 输出目录读写权限不足
 
 .PRIVATEDATA
 
@@ -160,6 +160,7 @@ Test-ParameterDependency -ChildName 'Guid' -ParentName 'AddToWindowsTerminal' -P
 if (-not (Test-Path `$Vswhere)) {
     Write-Error "vswhere.exe not found at: $Vswhere.
 在 $Vswhere 未找到 vswhere.exe。"
+exit 1
 }
 
 #2.生成ps1文件
@@ -174,6 +175,7 @@ if (-not (Test-Path `$Vswhere)) {
 if (-not `$vsRoot) {
     Write-Error "No Visual Studio instance detected.
 未检测到任何 Visual Studio 安装实例。"
+exit 1
 }
 
 `$devShell = Join-Path `$vsRoot "Common7\Tools\Launch-VsDevShell.ps1"
@@ -183,6 +185,7 @@ if (Test-Path `$devShell) {
 else {
     Write-Error "DevShell script is missing.
 Dev 命令行缺失。"
+exit 1
 }
 
 `$repoDir = '$RepoDir'
@@ -192,6 +195,7 @@ if (Test-Path `$repoDir) {
 else {
     Write-Error "Repo directory does not exist, staying in current working directory.
 仓库目录不存在，保持当前路径。"
+exit 1
 }
 "@
 
@@ -209,3 +213,5 @@ catch {
 脚本写入失败，权限不足或目录不可写，请更换输出目录或以管理员身份运行 PowerShell"
     exit 2
 }
+
+exit 0
