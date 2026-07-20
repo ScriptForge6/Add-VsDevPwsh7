@@ -3,23 +3,50 @@ on: [push, pull_request]
 
 jobs:
   test:
-    runs-on: windows-latest # Windows 才能正常跑 vswhere 逻辑测试
+    runs-on: windows-latest
     steps:
-      - uses: actions/checkout@v4
-      - name: Run automated test cases
+      - name: 检出代码
+        uses: actions/checkout@v4
+
+      - name: 自动化测试用例执行
         shell: pwsh
         run: |
-          # 测试1 非法vswhere，预期 exit 1
-          .\Add-VsDevPwsh7.ps1 -Vswhere "fake-123"
-          if ($LASTEXITCODE -ne 1) { Write-Error "Test 1 failed"; exit 1 }
+          $defaultVs = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe"
+          Write-Host "系统默认vswhere路径存在状态：$(Test-Path $defaultVs)"
 
-          # 测试2 无权限目录，预期 exit 2
-          $vs = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe"
-          .\Add-VsDevPwsh7.ps1 -Vswhere $vs -OutDir C:\
-          if ($LASTEXITCODE -ne 2) { Write-Error "Test 2 failed"; exit 1 }
+          # ====================== 测试1：非法vswhere路径，预期 exit 1 ======================
+          Write-Host "`n=== 测试1 非法vswhere，预期退出码 1 ==="
+          .\Add-VsDevPwsh7.ps1 -Vswhere fake-123 -ErrorAction SilentlyContinue
+          $exitCode1 = $LASTEXITCODE
+          if ($exitCode1 -ne 1)
+          {
+              Write-Error "用例1校验失败：预期exit 1，实际返回 $exitCode1"
+              exit 1
+          }
+          Write-Host "✅ 测试1 通过"
 
-          # 测试3 正常执行，预期 exit 0
-          $tmp = "$env:TEMP\test-output"
-          New-Item $tmp -ItemType Directory -Force | Out-Null
-          .\Add-VsDevPwsh7.ps1 -Vswhere $vs -OutDir $tmp
-          if ($LASTEXITCODE -ne 0) { Write-Error "Test 3 failed"; exit 1 }
+          # ====================== 测试2：输出目录无读写权限，预期 exit 2 ======================
+          Write-Host "`n=== 测试2 输出目录无权限，预期退出码 2 ==="
+          .\Add-VsDevPwsh7.ps1 -Vswhere $defaultVs -OutDir C:\ -ErrorAction SilentlyContinue
+          $exitCode2 = $LASTEXITCODE
+          if ($exitCode2 -ne 2)
+          {
+              Write-Error "用例2校验失败：预期exit 2，实际返回 $exitCode2"
+              exit 1
+          }
+          Write-Host "✅ 测试2 通过"
+
+          # ====================== 测试3：全部参数正常，预期 exit 0 ======================
+          Write-Host "`n=== 测试3 参数全部合法，预期退出码 0 ==="
+          $tmpTestDir = "$env:TEMP\vsdev-test-output"
+          New-Item -Path $tmpTestDir -ItemType Directory -Force | Out-Null
+          .\Add-VsDevPwsh7.ps1 -Vswhere $defaultVs -OutDir $tmpTestDir -ErrorAction SilentlyContinue
+          $exitCode3 = $LASTEXITCODE
+          if ($exitCode3 -ne 0)
+          {
+              Write-Error "用例3校验失败：预期exit 0，实际返回 $exitCode3"
+              exit 1
+          }
+          Write-Host "✅ 测试3 通过"
+
+          Write-Host "`n🎉 全部自动化测试用例执行通过"
