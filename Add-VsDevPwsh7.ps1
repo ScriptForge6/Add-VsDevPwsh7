@@ -155,15 +155,22 @@ Test-ParameterDependency -ChildName 'Guid' -ParentName 'AddToWindowsTerminal' -P
 #二、生成ps1文件
 
 
-#1.生成ps1文件
+#1.检验Vswhere
+
+if (-not (Test-Path `$Vswhere)) {
+    Write-Error "vswhere.exe not found at: $Vswhere.
+在 $Vswhere 未找到 vswhere.exe。"
+}
+
+#2.生成ps1文件
 
 $scriptContent = @"
-`$vsWherePath = '$Vswhere'
-if (-not (Test-Path `$vsWherePath)) {
-    Write-Error "vswhere.exe not found at: `$VswherePath.
-在 `$VswherePath 未找到 vswhere.exe。"
+`$Vswhere = '$Vswhere'
+if (-not (Test-Path `$Vswhere)) {
+    Write-Error "vswhere.exe not found at: `$Vswhere.
+在 `$Vswhere 未找到 vswhere.exe。"
 }
-`$vsRoot = & `$vsWherePath -latest -property installationPath
+`$vsRoot = & `$Vswhere -latest -property installationPath
 if (-not `$vsRoot) {
     Write-Error "No Visual Studio instance detected.
 未检测到任何 Visual Studio 安装实例。"
