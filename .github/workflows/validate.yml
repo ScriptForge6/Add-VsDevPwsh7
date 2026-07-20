@@ -1,0 +1,25 @@
+name: Validate Script
+on: [push, pull_request]
+
+jobs:
+  test:
+    runs-on: windows-latest # Windows 才能正常跑 vswhere 逻辑测试
+    steps:
+      - uses: actions/checkout@v4
+      - name: Run automated test cases
+        shell: pwsh
+        run: |
+          # 测试1 非法vswhere，预期 exit 1
+          .\Add-VsDevPwsh7.ps1 -Vswhere "fake-123"
+          if ($LASTEXITCODE -ne 1) { Write-Error "Test 1 failed"; exit 1 }
+
+          # 测试2 无权限目录，预期 exit 2
+          $vs = "C:\Program Files (x86)\Microsoft Visual Studio\Installer\vswhere.exe"
+          .\Add-VsDevPwsh7.ps1 -Vswhere $vs -OutDir C:\
+          if ($LASTEXITCODE -ne 2) { Write-Error "Test 2 failed"; exit 1 }
+
+          # 测试3 正常执行，预期 exit 0
+          $tmp = "$env:TEMP\test-output"
+          New-Item $tmp -ItemType Directory -Force | Out-Null
+          .\Add-VsDevPwsh7.ps1 -Vswhere $vs -OutDir $tmp
+          if ($LASTEXITCODE -ne 0) { Write-Error "Test 3 failed"; exit 1 }
