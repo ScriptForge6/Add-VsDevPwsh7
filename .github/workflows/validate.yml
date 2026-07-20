@@ -47,7 +47,7 @@ jobs:
           Set-Acl -Path $noWriteDir -AclObject $acl
           
           # 执行用例2
-          .\Add-VsDevPwsh7.ps1 -Vswhere $defaultVs -OutDir $readOnlyDir -ErrorAction SilentlyContinue
+          .\Add-VsDevPwsh7.ps1 -Vswhere $defaultVs -OutDir $noWriteDir -ErrorAction SilentlyContinue
           $exitCode2 = $LASTEXITCODE
           if ($exitCode2 -ne 2) {
               Write-Error "用例2校验失败：预期exit 2，实际返回 $exitCode2"

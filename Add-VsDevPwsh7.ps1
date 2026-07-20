@@ -25,18 +25,19 @@
 .EXTERNALSCRIPTDEPENDENCIES 
 
 .RELEASENOTES
-v0.1.3 (Emergency Critical Patch)
-- Critical Bug Fix: Remove extra backtick escape character before $Vswhere, which caused variable to be parsed as literal string.
-- 关键紧急修复：删除 $Vswhere 前多余的反引号转义符，修复变量被识别为纯文本字符串的严重bug
-- Exit code specification unchanged:
-  1 = Specified vswhere.exe cannot be found
-  2 = Target output directory lacks read/write permissions
-- 退出码定义维持不变：
-  1 = 指定的vswhere.exe文件不存在
-  2 = 目标输出目录无读写权限
-
-Affected Version: v0.1.2, all users must upgrade urgently
-受影响版本：v0.1.2，所有用户请紧急升级
+# v0.2.0-pre
+- add:
+    - Exit code specification update:
+      - `-1` = Operating system mismatch
+      - `3` = Failed to acquire administrator privileges
+    - New parameter added:
+      - -Pwsh7Path
+- 新增功能：
+    - 退出码定义新增：
+      - `-1` = 操作系统不匹配
+      - `3` = 管理员权限获取失败
+    - 新增参数：
+      - -Pwsh7Path
 
 .PRIVATEDATA
 
@@ -60,8 +61,16 @@ Optional. Specifies the path to vswhere.exe. Defaults to the official default in
 Optional. Directory path for the final generated ps1 script. Defaults to C:\VsDevWithPwsh7.
 可选，指定生成后的 ps1 脚本存放目录，默认路径为 C:\VsDevWithPwsh7。
 
+.PARAMETER RepoDir
+Optional. When specified, automatically navigates to this directory when launching the VS PowerShell 7 Developer Terminal.
+可选，指定后会在启动 VS PowerShell 7 开发者终端时，自动进入该目录。
+
+.PARAMETER Pwsh7Path
+Optional. When specified, searches for PowerShell 7 at the given path for use in the registry and Windows Terminal's settings.json. Defaults to the default installation location of PowerShell 7.
+可选，指定后会在该路径寻找 Powershell 7 ，以供注册表与 Windows Terminal 的 settings.json 使用，默认为 Powershell 7 的默认安装位置。
+
 .PARAMETER RegisterToRegistry
-Optional. When specified, registers the VS PowerShell 7 developer terminal to Windows Registry as an installed application.
+Optional. When specified, registers the VS PowerShell 7 Developer Terminal to Windows Registry as an installed application.
 可选，指定后会将 VS PowerShell 7 开发者终端写入注册表，注册为已安装程序。
 
 .PARAMETER RegistryName
@@ -69,7 +78,7 @@ Optional. Specifies the display name shown in Windows Registry and Apps list. De
 可选，指定在注册表与软件列表中展示的名称，默认为“Developer PowerShell 7 for VS”。
 
 .PARAMETER AddToWindowsTerminal
-Optional. When specified, adds the VS PowerShell 7 developer terminal profile to Windows Terminal's settings.json.
+Optional. When specified, adds the VS PowerShell 7 Developer Terminal profile to Windows Terminal's settings.json.
 可选，指定后会将 VS PowerShell 7 开发者终端配置写入 Windows Terminal 的 settings.json。
 
 .PARAMETER WtProfileName
@@ -93,6 +102,7 @@ param(
     [string]$Vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe",
     [string]$OutDir = "C:\VsDevWithPwsh7",
     [string]$RepoDir = (Join-Path $env:USERPROFILE "source\repos"),
+    
 
     # 注册表注册相关参数
     [switch]$RegisterToRegistry,
@@ -101,7 +111,10 @@ param(
     # Windows Terminal 配置相关参数
     [switch]$AddToWindowsTerminal,
     [string]$WtProfileName = $RegistryName,
-    [string]$Guid
+    [string]$Guid,
+
+    # 注册表注册、 Windows Terminal 共用参数
+    [string]$Pwsh7Path = "${env:ProgramFiles}\PowerShell\7\pwsh.exe",
 )
 
 
@@ -112,7 +125,36 @@ param(
 
 $InformationPreference = 'Continue'
 
-#2.初始化变量
+#2.检查系统
+
+# 获取PS总版本
+$PSVersion = $PSVersionTable.PSVersion.Major
+
+# 检查版本
+if($PSVersion -le 5) {
+    Write-Information "OS check passed
+操作系统检测通过"
+} elseif($PSVersion -gt 5) {
+    if ($IsWindows) {
+        Write-Information "OS check passed
+操作系统检测通过"
+        exit -1
+    } elseif ($IsLinux) {
+        Write-Error "OS check failed. Current OS: Linux
+操作系统检测未通过，目前操作系统：Linux"
+        exit -1
+    } elseif ($IsMacOS) {
+        Write-Error "OS check failed. Current OS: macOS
+操作系统检测未通过，目前操作系统：macOS"
+        exit -1
+    } else {
+        Write-Error "OS check failed. Current OS: Unknown
+操作系统检测未通过，目前操作系统：未知系统"
+        exit -1
+    }
+}
+
+#3.初始化变量
 
 # 初始化Guid
 if (-not $PSBoundParameters.ContainsKey('Guid')) {
@@ -121,7 +163,7 @@ if (-not $PSBoundParameters.ContainsKey('Guid')) {
 
 #3.校验参数使用是否正确
 
-#校验函数：
+# 校验函数：
 function Test-ParameterDependency {
     [CmdletBinding()]
     param (
@@ -147,15 +189,20 @@ function Test-ParameterDependency {
     return
 }
 
-#校验-RegistryName参数
+# 校验-RegistryName参数
 Test-ParameterDependency -ChildName 'RegistryName' -ParentName 'RegisterToRegistry' -ParentIsPresent:$RegisterToRegistry -CallerBoundParameters $PSBoundParameters
 
-#校验-WtProfileName参数
+# 校验-WtProfileName参数
 Test-ParameterDependency -ChildName 'WtProfileName' -ParentName 'AddToWindowsTerminal' -ParentIsPresent:$AddToWindowsTerminal -CallerBoundParameters $PSBoundParameters
 
-#校验-Guid参数
+# 校验-Guid参数
 Test-ParameterDependency -ChildName 'Guid' -ParentName 'AddToWindowsTerminal' -ParentIsPresent:$AddToWindowsTerminal -CallerBoundParameters $PSBoundParameters
 
+# 校验-Pwsh7Path参数
+if($CallerBoundParameters.ContainsKey("Pwsh7Path") -and -not ($RegisterToRegistry -or $AddToWindowsTerminal)) {
+    Write-Warning "The parameter -Pwsh7Path only takes effect when -RegisterToRegistry or -AddToWindowsTerminal is specified; the input will be ignored.
+参数 -Pwsh7Path 仅在指定 -RegisterToRegistry 或 -AddToWindowsTerminal 时生效，当前传入无效"
+}
 
 #二、生成ps1文件
 
@@ -219,4 +266,32 @@ catch {
     exit 2
 }
 
+
+#二、注册表注册
+
+
+#注册表函数
+function Register-VsDevTerminalToRegistry {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory = $true)]
+        [string]$ScriptPath,
+        [Parameter(Mandatory = $true)]
+        [string]$DisplayRegName
+    )
+
+    #1.检测权限
+
+    $isAdmin = [Security.Principal.WindowsPrincipal]::GetCurrent().IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    if (-not $isAdmin) {
+        Start-Process powershell -ArgumentList "-File `"$ScriptPath`"" -Verb RunAs
+        exit 3
+    }
+
+    #2.
+}
+
+
+
+# 清理
 exit 0
