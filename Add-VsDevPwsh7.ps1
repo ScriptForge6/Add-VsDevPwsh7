@@ -25,13 +25,18 @@
 .EXTERNALSCRIPTDEPENDENCIES 
 
 .RELEASENOTES
-v0.1.2
-- Standardized script exit codes:
-  1 = Target file not found
-  2 = Insufficient read/write directory permissions
-- 标准化脚本退出码：
-  1 = 未找到指定文件
+v0.1.3 (Emergency Patch)
+- Fix: Hardcoded default vswhere path judgment error, file exists but misjudged as missing
+- 紧急修复：硬编码默认vswhere路径判断异常，文件真实存在却误判缺失
+- Standardized exit codes remain unchanged:
+  1 = vswhere.exe file missing
+  2 = Output directory read/write permission denied
+- 退出码规范保持不变：
+  1 = 未找到vswhere.exe文件
   2 = 输出目录读写权限不足
+
+Affected versions: v0.1.2, upgrade immediately
+受影响版本：v0.1.2，请立即升级
 
 .PRIVATEDATA
 
@@ -157,7 +162,7 @@ Test-ParameterDependency -ChildName 'Guid' -ParentName 'AddToWindowsTerminal' -P
 
 #1.检验Vswhere
 
-if (-not (Test-Path `$Vswhere)) {
+if (-not (Test-Path $Vswhere)) {
     Write-Error "vswhere.exe not found at: $Vswhere.
 在 $Vswhere 未找到 vswhere.exe。"
 exit 1
