@@ -26,10 +26,26 @@ jobs:
 
           # ====================== 测试2：输出目录无读写权限，预期 exit 2 ======================
           Write-Host "`n=== 测试2 输出目录无权限，预期退出码 2 ==="
-          $readOnlyDir = Join-Path $env:TEMP "ro-test-dir"
-          New-Item $readOnlyDir -ItemType Directory -Force | Out-Null
-          # 设置只读属性
-          $(Get-Item $readOnlyDir).Attributes += [System.IO.FileAttributes]::ReadOnly
+          # 创建本地临时目录，不使用系统目录
+          $noWriteDir = Join-Path $env:TEMP "no-write-test-dir"
+          New-Item $noWriteDir -ItemType Directory -Force | Out-Null
+          
+          # 获取当前登录用户名
+          $currentUser = [System.Security.Principal.WindowsIdentity]::GetCurrent().Name
+          Write-Host "当前执行用户：$currentUser"
+
+          # 新建ACL规则：拒绝当前用户 写入/创建文件 权限
+          $acl = Get-Acl $noWriteDir
+          $denyRule = New-Object System.Security.AccessControl.FileSystemAccessRule(
+              $currentUser,
+              "CreateFiles,Write,WriteData",
+              "ContainerInherit,ObjectInherit",
+              "None",
+              "Deny"
+          )
+          $acl.AddAccessRule($denyRule)
+          Set-Acl -Path $noWriteDir -AclObject $acl
+          
           # 执行用例2
           .\Add-VsDevPwsh7.ps1 -Vswhere $defaultVs -OutDir $readOnlyDir -ErrorAction SilentlyContinue
           $exitCode2 = $LASTEXITCODE
