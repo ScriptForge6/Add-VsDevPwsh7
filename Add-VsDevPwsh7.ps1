@@ -198,7 +198,7 @@ Test-ParameterDependency -ChildName 'WtProfileName' -ParentName 'AddToWindowsTer
 Test-ParameterDependency -ChildName 'Guid' -ParentName 'AddToWindowsTerminal' -ParentIsPresent:$AddToWindowsTerminal -CallerBoundParameters $PSBoundParameters
 
 # 校验-Pwsh7Path参数
-if($CallerBoundParameters.ContainsKey("Pwsh7Path") -and -not ($RegisterToRegistry -or $AddToWindowsTerminal)) {
+if($PSBoundParameters.ContainsKey("Pwsh7Path") -and -not ($RegisterToRegistry -or $AddToWindowsTerminal)) {
     Write-Warning "The parameter -Pwsh7Path only takes effect when -RegisterToRegistry or -AddToWindowsTerminal is specified; the input will be ignored.
 参数 -Pwsh7Path 仅在指定 -RegisterToRegistry 或 -AddToWindowsTerminal 时生效，当前传入无效"
 }
