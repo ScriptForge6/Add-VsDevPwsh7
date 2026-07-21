@@ -114,7 +114,7 @@ param(
     [string]$Guid,
 
     # 注册表注册、 Windows Terminal 共用参数
-    [string]$Pwsh7Path = "${env:ProgramFiles}\PowerShell\7\pwsh.exe",
+    [string]$Pwsh7Path = "${env:ProgramFiles}\PowerShell\7\pwsh.exe"
 )
 
 
