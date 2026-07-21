@@ -12,4 +12,3 @@
 - `-1` = Operating system mismatch
 - `1` = Specified vswhere.exe cannot be found
 - `2` = Target output directory lacks read/write permissions
-- `3` = Failed to acquire administrator privileges

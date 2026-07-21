@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 0.1.3
+.VERSION 0.2.0
 
 .GUID af7c8e7f-7575-442b-a1ea-ca749eedd0d8
 
@@ -25,19 +25,27 @@
 .EXTERNALSCRIPTDEPENDENCIES 
 
 .RELEASENOTES
-# v0.2.0-pre
-- add:
-    - Exit code specification update:
-      - `-1` = Operating system mismatch
-      - `3` = Failed to acquire administrator privileges
-    - New parameter added:
-      - -Pwsh7Path
-- 新增功能：
-    - 退出码定义新增：
-      - `-1` = 操作系统不匹配
-      - `3` = 管理员权限获取失败
-    - 新增参数：
-      - -Pwsh7Path
+## 0.2.0
+
+### Added / 新增
+- **New parameter `-Pwsh7Path`** / 新增参数 `-Pwsh7Path`：Custom PowerShell 7 path for registry and Windows Terminal / 支持自定义 PowerShell 7 路径，用于注册表和 Windows Terminal 配置
+- **x64 OS & process detection** / x64 系统与进程检测：Blocks 32-bit PowerShell execution / 拒绝 32 位 PowerShell 运行，确保 VS 开发环境完整性
+- **Full registry implementation** / 注册表写入完整实现：Writes DisplayName, Icon, InstallLocation, Uninstall strings, Version / 包含显示名称、图标路径、安装位置、卸载命令、版本号等完整字段
+- **`$Version` internal variable** / 新增 `$Version` 内部变量：Unified version identifier across the script / 统一脚本版本标识
+
+### Changed / 变更
+- **Parameter type: `[switch]` → `[bool]`** / 参数类型变更：`-RegisterToRegistry` & `-AddToWindowsTerminal` now accept explicit `$false` / 支持显式 `$false` 传值
+- **Split registry naming** / 注册表名称参数拆分：Replaced `-RegistryName` with `-RegistryDisName` (display only) + hardcoded internal key name / 原 `-RegistryName` 拆分为可配置显示名与内部硬编码名，避免用户误改卸载键路径
+- **Refactored OS detection** / OS 检测逻辑重构：Flattened flow; x86 systems now return `-1` alongside Linux/macOS / 扁平化判断，x86 系统与 Linux/macOS 同等处理
+- **Generated script quality** / 生成脚本质量提升：Added `[CmdletBinding()]` header, fixed variable escaping / 补全 `[CmdletBinding()]` 头部，修复变量引用转义
+
+### Removed / 移除
+- **⚠️ Breaking: Exit code `3` removed** / ⚠️ 破坏性变更：退出码 `3` 已移除：Admin failure now warns and skips instead of elevating / 管理员权限不足时改为警告跳过，不再自动提权退出
+- **`-RegistryName` parameter** / `-RegistryName` 参数已移除：Superseded by `-RegistryDisName` / 功能由 `-RegistryDisName` 替代
+
+### Fixed / 修复
+- Fixed `vswhere` path variable not expanding in generated script / 修复生成脚本中 `vswhere` 路径变量未正确展开
+- Fixed registry function parameter mismatch (`-ScriptPath` → `-ScriptDir`) / 修复注册表函数参数不匹配导致的潜在调用错误
 
 .PRIVATEDATA
 
@@ -73,7 +81,7 @@ Optional. When specified, searches for PowerShell 7 at the given path for use in
 Optional. When specified, registers the VS PowerShell 7 Developer Terminal to Windows Registry as an installed application.
 可选，指定后会将 VS PowerShell 7 开发者终端写入注册表，注册为已安装程序。
 
-.PARAMETER RegistryName
+.PARAMETER RegistryDisName
 Optional. Specifies the display name shown in Windows Registry and Apps list. Defaults to "Developer PowerShell 7 for VS".
 可选，指定在注册表与软件列表中展示的名称，默认为“Developer PowerShell 7 for VS”。
 
@@ -88,6 +96,23 @@ Optional. Specifies the display name used in Windows Terminal. If not provided, 
 .PARAMETER Guid
 Optional. Specifies the unique GUID identifier for the Windows Terminal profile. A random GUID will be generated if omitted.
 可选，指定 Windows Terminal 配置项的唯一标识 GUID，未传入时将随机生成。
+#>
+
+<#
+   Copyright 2026 Scriptforge
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+
 #>
 
 
@@ -105,20 +130,25 @@ param(
     
 
     # 注册表注册相关参数
-    [switch]$RegisterToRegistry,
-    [string]$RegistryName = "Developer PowerShell 7 for VS",
+    [bool]$RegisterToRegistry = $false,
+    [string]$RegistryDisName = "Developer PowerShell 7 for VS",
 
     # Windows Terminal 配置相关参数
-    [switch]$AddToWindowsTerminal,
-    [string]$WtProfileName = $RegistryName,
+    [bool]$AddToWindowsTerminal = $false,
+    [string]$WtProfileName = $RegistryDisName,
     [string]$Guid,
 
     # 注册表注册、 Windows Terminal 共用参数
     [string]$Pwsh7Path = "${env:ProgramFiles}\PowerShell\7\pwsh.exe"
 )
 
+#2.全局变量
 
-#一、初始化
+$outputScriptName = "Start-VsDevPwsh7.ps1"
+$RegistryName = "Scriptforge.powershell.$outputScriptName"
+$Version = "v0.2.0-pre"
+
+#二、初始化
 
 
 #1.初始化输出等级
@@ -130,29 +160,41 @@ $InformationPreference = 'Continue'
 # 获取PS总版本
 $PSVersion = $PSVersionTable.PSVersion.Major
 
-# 检查版本
-if($PSVersion -le 5) {
-    Write-Information "OS check passed
-操作系统检测通过"
-} elseif($PSVersion -gt 5) {
-    if ($IsWindows) {
-        Write-Information "OS check passed
-操作系统检测通过"
-    } elseif ($IsLinux) {
-        Write-Error "OS check failed. Current OS: Linux
-操作系统检测未通过，目前操作系统：Linux"
-        exit -1
-    } elseif ($IsMacOS) {
-        Write-Error "OS check failed. Current OS: macOS
-操作系统检测未通过，目前操作系统：macOS"
-        exit -1
-    } else {
-        Write-Error "OS check failed. Current OS: Unknown
-操作系统检测未通过，目前操作系统：未知系统"
-        exit -1
+# 检查系统位数
+function Test-Is64BitOS {
+    $osArch = [Environment]::GetEnvironmentVariable("PROCESSOR_ARCHITEW6432")
+    if ($osArch) {
+        return $true
     }
+
+    return [Environment]::Is64BitProcess
 }
 
+# 检查版本
+if($PSVersion -gt 5 -and $IsLinux) {
+    Write-Error "OS check failed. Current OS: Linux
+操作系统检测未通过，目前操作系统：Linux"
+    exit -1
+}
+elseif($PSVersion -gt 5 -and $IsMacOS) {
+    Write-Error "OS check failed. Current OS: macOS
+操作系统检测未通过，目前操作系统：macOS"
+    exit -1
+}
+elseif(-not (Test-Is64BitOS)) {
+    Write-Error "OS check failed. Current OS: x86
+操作系统检测未通过，目前操作系统：x86"
+    exit -1
+}
+elseif(($PSVersion -le 5) -or (($PSVersion -gt 5) -and $IsWindows)) {
+    Write-Information "OS check passed
+操作系统检测通过"
+}
+else {
+    Write-Error "OS check failed. Current OS: Unknown
+操作系统检测未通过，目前操作系统：未知系统"
+    exit -1
+}
 #3.初始化变量
 
 # 初始化Guid
@@ -160,7 +202,15 @@ if (-not $PSBoundParameters.ContainsKey('Guid')) {
     $Guid = [guid]::NewGuid().ToString("B")
 }
 
-#3.校验参数使用是否正确
+#4.检测x64/x86进程
+
+if (-not [Environment]::Is64BitProcess) {
+    Write-Error "You are currently running 32-bit PowerShell. Please use 64-bit PowerShell instead.
+当前是 32 位 PowerShell，请使用 64 位 Powershell"
+    exit -1
+}
+
+#5.校验参数使用是否正确
 
 # 校验函数：
 function Test-ParameterDependency {
@@ -189,7 +239,10 @@ function Test-ParameterDependency {
 }
 
 # 校验-RegistryName参数
-Test-ParameterDependency -ChildName 'RegistryName' -ParentName 'RegisterToRegistry' -ParentIsPresent:$RegisterToRegistry -CallerBoundParameters $PSBoundParameters
+if($PSBoundParameters.ContainsKey("RegistryName") -and -not ($RegisterToRegistry -or $OnlyRegisterToRegistry)) {
+    Write-Warning "The parameter -RegistryName only takes effect when -RegisterToRegistry or -OnlyRegisterToRegistry is specified; the input will be ignored.
+参数 -RegistryName 仅在指定 -RegisterToRegistry 或 -OnlyRegisterToRegistry 时生效，当前传入无效"
+}
 
 # 校验-WtProfileName参数
 Test-ParameterDependency -ChildName 'WtProfileName' -ParentName 'AddToWindowsTerminal' -ParentIsPresent:$AddToWindowsTerminal -CallerBoundParameters $PSBoundParameters
@@ -198,12 +251,13 @@ Test-ParameterDependency -ChildName 'WtProfileName' -ParentName 'AddToWindowsTer
 Test-ParameterDependency -ChildName 'Guid' -ParentName 'AddToWindowsTerminal' -ParentIsPresent:$AddToWindowsTerminal -CallerBoundParameters $PSBoundParameters
 
 # 校验-Pwsh7Path参数
-if($PSBoundParameters.ContainsKey("Pwsh7Path") -and -not ($RegisterToRegistry -or $AddToWindowsTerminal)) {
-    Write-Warning "The parameter -Pwsh7Path only takes effect when -RegisterToRegistry or -AddToWindowsTerminal is specified; the input will be ignored.
-参数 -Pwsh7Path 仅在指定 -RegisterToRegistry 或 -AddToWindowsTerminal 时生效，当前传入无效"
+if($PSBoundParameters.ContainsKey("Pwsh7Path") -and -not ($RegisterToRegistry -or $AddToWindowsTerminal -or $OnlyRegisterToRegistry)) {
+    Write-Warning "The parameter -Pwsh7Path only takes effect when -RegisterToRegistry , -AddToWindowsTerminal  or -OnlyRegisterToRegistry is specified; the input will be ignored.
+参数 -Pwsh7Path 仅在指定 -RegisterToRegistry ， -AddToWindowsTerminal 或 -OnlyRegisterToRegistry 时生效，当前传入无效"
 }
 
-#二、生成ps1文件
+
+# 四、生成ps1文件
 
 
 #1.检验Vswhere
@@ -217,6 +271,9 @@ exit 1
 #2.生成ps1文件
 
 $scriptContent = @"
+[CmdletBinding()]
+param()
+
 `$Vswhere = '$Vswhere'
 if (-not (Test-Path `$Vswhere)) {
     Write-Error "vswhere.exe not found at: `$Vswhere.
@@ -250,7 +307,7 @@ exit 1
 }
 "@
 
-$outputScript = Join-Path $OutDir "Start-VsDevPwsh7.ps1"
+$outputScript = Join-Path $OutDir "$OutputScriptName"
 try {
     if (-not (Test-Path $OutDir)) {
         New-Item -Path $OutDir -ItemType Directory -Force | Out-Null
@@ -269,28 +326,52 @@ catch {
 #二、注册表注册
 
 
-#注册表函数
+#1.注册表函数
+
 function Register-VsDevTerminalToRegistry {
     [CmdletBinding()]
     param (
         [Parameter(Mandatory = $true)]
-        [string]$ScriptPath,
+        [string]$ScriptDir,
         [Parameter(Mandatory = $true)]
-        [string]$DisplayRegName
+        [string]$DisplayRegName,
+        #[Parameter(Mandatory = $true)]
+        [string]$Pwsh7Path
     )
 
     #1.检测权限
 
-    $isAdmin = [Security.Principal.WindowsPrincipal]::GetCurrent().IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+    $isAdmin = [Security.Principal.WindowsPrincipal]::new(
+        [Security.Principal.WindowsIdentity]::GetCurrent()
+        ).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
     if (-not $isAdmin) {
-        Start-Process powershell -ArgumentList "-File `"$ScriptPath`"" -Verb RunAs
-        exit 3
+        Write-Warning "Administrator privileges are required to write to HKLM registry, registration skipped.
+缺少管理员权限，无法写入 HKLM 注册表，跳过注册。"
+        return
+
     }
 
+
     #2.
+    $regKeyPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$RegistryName"
+    if (-not (Test-Path $regKeyPath)) {
+        New-Item -Path $regKeyPath -Force | Out-Null
+    }
+    $ScriptPath = Join-Path $OutDir "$OutputScriptName"
+    Set-ItemProperty -Path $regKeyPath -Name "DisplayName" -Value $DisplayRegName
+    Set-ItemProperty -Path $regKeyPath -Name "DisplayIcon" -Value $Pwsh7Path
+    Set-ItemProperty -Path $regKeyPath -Name "InstallLocation" -Value (Split-Path $ScriptPath)
+    Set-ItemProperty -Path $regKeyPath -Name "QuietUninstallString" -Value "reg delete `"$regKeyPath`" /f"
+    Set-ItemProperty -Path $regKeyPath -Name "UninstallString" -Value "reg delete `"$regKeyPath`" /f"
+    Set-ItemProperty -Path $regKeyPath -Name "InstallDate" -Value (Get-Date -Format "yyyyMMdd")
+    Set-ItemProperty -Path $regKeyPath -Name "DisplayVersion" -Value $Version
+    Write-Information "Successfully registered to Windows Registry.
+已成功写入注册表，应用将出现在开始菜单。"
 }
 
 
-
+if($RegisterToRegistry) {
+    Register-VsDevTerminalToRegistry -ScriptDir "$OutDir" -DisplayRegName "$RegistryDisName" -Pwsh7Path "$Pwsh7Path"
+}
 # 清理
 exit 0
