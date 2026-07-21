@@ -138,7 +138,6 @@ if($PSVersion -le 5) {
     if ($IsWindows) {
         Write-Information "OS check passed
 操作系统检测通过"
-        exit -1
     } elseif ($IsLinux) {
         Write-Error "OS check failed. Current OS: Linux
 操作系统检测未通过，目前操作系统：Linux"
