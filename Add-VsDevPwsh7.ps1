@@ -25,8 +25,9 @@
 .EXTERNALSCRIPTDEPENDENCIES 
 
 .RELEASENOTES
-## v0.2.1
-- Fix: Removed "-pre" suffix from $Version variable / 删除 $Version 变量中的 "-pre" 后缀
+## v0.2.2
+v0.2.2
+- Fix: Parameter defaults now avoid Windows-only environment variables before OS check / 修复参数默认值在 OS 检测前引用 Windows 专属环境变量导致 Linux 上提前报错的问题
 - No functional changes / 无功能变更
 
 .PRIVATEDATA
@@ -108,7 +109,7 @@ param(
     # 基础通用参数
     [string]$Vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe",
     [string]$OutDir = "C:\VsDevWithPwsh7",
-    [string]$RepoDir = (Join-Path $env:USERPROFILE "source\repos"),
+    [string]$RepoDir,
     
 
     # 注册表注册相关参数
@@ -182,6 +183,11 @@ else {
 # 初始化Guid
 if (-not $PSBoundParameters.ContainsKey('Guid')) {
     $Guid = [guid]::NewGuid().ToString("B")
+}
+
+# 初始化RepoDir
+if (-not $RepoDir) {
+    $RepoDir = Join-Path $env:USERPROFILE "source\repos"
 }
 
 #4.检测x64/x86进程
