@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 0.2.2
+.VERSION 0.2.3
 
 .GUID af7c8e7f-7575-442b-a1ea-ca749eedd0d8
 
@@ -25,9 +25,18 @@
 .EXTERNALSCRIPTDEPENDENCIES 
 
 .RELEASENOTES
-## v0.2.2
-v0.2.2
-- Fix: Parameter defaults now avoid Windows-only environment variables before OS check / 修复参数默认值在 OS 检测前引用 Windows 专属环境变量导致 Linux 上提前报错的问题
+## v0.2.3
+
+- Fix: Fix the problem of failing to register correctly to the registry / 修复无法正确注册到注册表的问题
+Fix: Fix the issue that the script forcibly overwrites the native -InformationAction common parameter
+The original logic hardcoded "$InformationPreference = 'Continue'", which would override custom output policies such as SilentlyContinue / Inquire passed by users;
+It is modified to apply the default output level only when the user does not manually specify -InformationAction and there is no preset value in the scope.
+
+修复：解决脚本强制覆盖原生公共参数 -InformationAction 的问题
+原有逻辑硬编码赋值 $InformationPreference = 'Continue'，会覆盖用户传入的 SilentlyContinue / Inquire 等自定义输出策略；
+修改后仅在用户未手动指定 -InformationAction 且当前作用域无预设值时，才启用默认输出等级。
+
+- Refactor: 
 - No functional changes / 无功能变更
 
 .PRIVATEDATA
@@ -127,16 +136,24 @@ param(
 
 #2.全局变量
 
-$outputScriptName = "Start-VsDevPwsh7.ps1"
-$RegistryName = "Scriptforge.powershell.$outputScriptName"
-$Version = "v0.2.2"
+$OutputScriptName = "Start-VsDevPwsh7.ps1"
+$RegistryName = "Scriptforge.powershell.$OutputScriptName"
+$Version = "0.2.3"
+$Publisher = "Scriptforge"
+$RegKeyPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$RegistryName"
+$RegKeyPathString = "HKLM\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$RegistryName"
+$QuietUninstall = "reg delete `"$RegKeyPathString`" /f"
+$Uninstall = "reg delete `"$RegKeyPathString`" /f"
+$Date = (Get-Date -Format "yyyyMMdd")
 
 #二、初始化
 
 
 #1.初始化输出等级
 
-$InformationPreference = 'Continue'
+if (-$PSBoundParameters['InformationAction'] -and -$InformationPreference) {
+    $InformationPreference = 'Continue'
+}
 
 #2.检查系统
 
@@ -145,8 +162,8 @@ $PSVersion = $PSVersionTable.PSVersion.Major
 
 # 检查系统位数
 function Test-Is64BitOS {
-    $osArch = [Environment]::GetEnvironmentVariable("PROCESSOR_ARCHITEW6432")
-    if ($osArch) {
+    $OsArch = [Environment]::GetEnvironmentVariable("PROCESSOR_ARCHITEW6432")
+    if ($OsArch) {
         return $true
     }
 
@@ -178,6 +195,7 @@ else {
 操作系统检测未通过，目前操作系统：未知系统"
     exit -1
 }
+
 #3.初始化变量
 
 # 初始化Guid
@@ -227,10 +245,7 @@ function Test-ParameterDependency {
 }
 
 # 校验-RegistryName参数
-if($PSBoundParameters.ContainsKey("RegistryName") -and -not ($RegisterToRegistry -or $OnlyRegisterToRegistry)) {
-    Write-Warning "The parameter -RegistryName only takes effect when -RegisterToRegistry or -OnlyRegisterToRegistry is specified; the input will be ignored.
-参数 -RegistryName 仅在指定 -RegisterToRegistry 或 -OnlyRegisterToRegistry 时生效，当前传入无效"
-}
+Test-ParameterDependency -ChildName 'RegistryName' -ParentName 'RegisterToRegistry' -ParentIsPresent:$RegisterToRegistry -CallerBoundParameters $PSBoundParameters
 
 # 校验-WtProfileName参数
 Test-ParameterDependency -ChildName 'WtProfileName' -ParentName 'AddToWindowsTerminal' -ParentIsPresent:$AddToWindowsTerminal -CallerBoundParameters $PSBoundParameters
@@ -239,9 +254,9 @@ Test-ParameterDependency -ChildName 'WtProfileName' -ParentName 'AddToWindowsTer
 Test-ParameterDependency -ChildName 'Guid' -ParentName 'AddToWindowsTerminal' -ParentIsPresent:$AddToWindowsTerminal -CallerBoundParameters $PSBoundParameters
 
 # 校验-Pwsh7Path参数
-if($PSBoundParameters.ContainsKey("Pwsh7Path") -and -not ($RegisterToRegistry -or $AddToWindowsTerminal -or $OnlyRegisterToRegistry)) {
-    Write-Warning "The parameter -Pwsh7Path only takes effect when -RegisterToRegistry , -AddToWindowsTerminal  or -OnlyRegisterToRegistry is specified; the input will be ignored.
-参数 -Pwsh7Path 仅在指定 -RegisterToRegistry ， -AddToWindowsTerminal 或 -OnlyRegisterToRegistry 时生效，当前传入无效"
+if($CallerBoundParameters.ContainsKey("Pwsh7Path") -and -not ($RegisterToRegistry -or $AddToWindowsTerminal)) {
+    Write-Warning "The parameter -Pwsh7Path only takes effect when -RegisterToRegistry or -AddToWindowsTerminal is specified; the input will be ignored.
+参数 -Pwsh7Path 仅在指定 -RegisterToRegistry 或 -AddToWindowsTerminal 时生效，当前传入无效"
 }
 
 
@@ -318,14 +333,7 @@ catch {
 
 function Register-VsDevTerminalToRegistry {
     [CmdletBinding()]
-    param (
-        [Parameter(Mandatory = $true)]
-        [string]$ScriptDir,
-        [Parameter(Mandatory = $true)]
-        [string]$DisplayRegName,
-        #[Parameter(Mandatory = $true)]
-        [string]$Pwsh7Path
-    )
+    param ()
 
     #1.检测权限
 
@@ -340,26 +348,30 @@ function Register-VsDevTerminalToRegistry {
     }
 
 
-    #2.
-    $regKeyPath = "HKLM:\SOFTWARE\Microsoft\Windows\CurrentVersion\Uninstall\$RegistryName"
-    if (-not (Test-Path $regKeyPath)) {
-        New-Item -Path $regKeyPath -Force | Out-Null
+    #2.注册到注册表
+
+    # 创建目录
+    if (-not (Test-Path $RegKeyPath)) {
+        New-Item -Path $RegKeyPath -Force | Out-Null
     }
+
+    # 修改项
     $ScriptPath = Join-Path $OutDir "$OutputScriptName"
-    Set-ItemProperty -Path $regKeyPath -Name "DisplayName" -Value $DisplayRegName
-    Set-ItemProperty -Path $regKeyPath -Name "DisplayIcon" -Value $Pwsh7Path
-    Set-ItemProperty -Path $regKeyPath -Name "InstallLocation" -Value (Split-Path $ScriptPath)
-    Set-ItemProperty -Path $regKeyPath -Name "QuietUninstallString" -Value "reg delete `"$regKeyPath`" /f"
-    Set-ItemProperty -Path $regKeyPath -Name "UninstallString" -Value "reg delete `"$regKeyPath`" /f"
-    Set-ItemProperty -Path $regKeyPath -Name "InstallDate" -Value (Get-Date -Format "yyyyMMdd")
-    Set-ItemProperty -Path $regKeyPath -Name "DisplayVersion" -Value $Version
+    Set-ItemProperty -Path $RegKeyPath -Name "DisplayName" -Value "$RegistryDisName"
+    Set-ItemProperty -Path $RegKeyPath -Name "DisplayIcon" -Value "$Pwsh7Path"
+    Set-ItemProperty -Path $RegKeyPath -Name "InstallLocation" -Value (Split-Path $ScriptPath)
+    Set-ItemProperty -Path $RegKeyPath -Name "QuietUninstallString" -Value "$QuietUninstall"
+    Set-ItemProperty -Path $RegKeyPath -Name "UninstallString" -Value "$Uninstall"
+    Set-ItemProperty -Path $RegKeyPath -Name "InstallDate" -Value $Date
+    Set-ItemProperty -Path $RegKeyPath -Name "DisplayVersion" -Value "$Version"
+    Set-ItemProperty -Path $RegKeyPath -Name "Publisher" -Value "$Publisher"
     Write-Information "Successfully registered to Windows Registry.
-已成功写入注册表，应用将出现在开始菜单。"
+已成功写入注册表。"
 }
 
 
 if($RegisterToRegistry) {
-    Register-VsDevTerminalToRegistry -ScriptDir "$OutDir" -DisplayRegName "$RegistryDisName" -Pwsh7Path "$Pwsh7Path"
+    Register-VsDevTerminalToRegistry
 }
 # 清理
 exit 0
