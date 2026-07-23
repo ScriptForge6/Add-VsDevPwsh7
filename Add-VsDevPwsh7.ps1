@@ -1,6 +1,6 @@
 <#PSScriptInfo
 
-.VERSION 0.2.0
+.VERSION 0.2.1
 
 .GUID af7c8e7f-7575-442b-a1ea-ca749eedd0d8
 
@@ -25,27 +25,9 @@
 .EXTERNALSCRIPTDEPENDENCIES 
 
 .RELEASENOTES
-## 0.2.0
-
-### Added / 新增
-- **New parameter `-Pwsh7Path`** / 新增参数 `-Pwsh7Path`：Custom PowerShell 7 path for registry and Windows Terminal / 支持自定义 PowerShell 7 路径，用于注册表和 Windows Terminal 配置
-- **x64 OS & process detection** / x64 系统与进程检测：Blocks 32-bit PowerShell execution / 拒绝 32 位 PowerShell 运行，确保 VS 开发环境完整性
-- **Full registry implementation** / 注册表写入完整实现：Writes DisplayName, Icon, InstallLocation, Uninstall strings, Version / 包含显示名称、图标路径、安装位置、卸载命令、版本号等完整字段
-- **`$Version` internal variable** / 新增 `$Version` 内部变量：Unified version identifier across the script / 统一脚本版本标识
-
-### Changed / 变更
-- **Parameter type: `[switch]` → `[bool]`** / 参数类型变更：`-RegisterToRegistry` & `-AddToWindowsTerminal` now accept explicit `$false` / 支持显式 `$false` 传值
-- **Split registry naming** / 注册表名称参数拆分：Replaced `-RegistryName` with `-RegistryDisName` (display only) + hardcoded internal key name / 原 `-RegistryName` 拆分为可配置显示名与内部硬编码名，避免用户误改卸载键路径
-- **Refactored OS detection** / OS 检测逻辑重构：Flattened flow; x86 systems now return `-1` alongside Linux/macOS / 扁平化判断，x86 系统与 Linux/macOS 同等处理
-- **Generated script quality** / 生成脚本质量提升：Added `[CmdletBinding()]` header, fixed variable escaping / 补全 `[CmdletBinding()]` 头部，修复变量引用转义
-
-### Removed / 移除
-- **⚠️ Breaking: Exit code `3` removed** / ⚠️ 破坏性变更：退出码 `3` 已移除：Admin failure now warns and skips instead of elevating / 管理员权限不足时改为警告跳过，不再自动提权退出
-- **`-RegistryName` parameter** / `-RegistryName` 参数已移除：Superseded by `-RegistryDisName` / 功能由 `-RegistryDisName` 替代
-
-### Fixed / 修复
-- Fixed `vswhere` path variable not expanding in generated script / 修复生成脚本中 `vswhere` 路径变量未正确展开
-- Fixed registry function parameter mismatch (`-ScriptPath` → `-ScriptDir`) / 修复注册表函数参数不匹配导致的潜在调用错误
+## v0.2.1
+- Fix: Removed "-pre" suffix from $Version variable / 删除 $Version 变量中的 "-pre" 后缀
+- No functional changes / 无功能变更
 
 .PRIVATEDATA
 
@@ -146,7 +128,7 @@ param(
 
 $outputScriptName = "Start-VsDevPwsh7.ps1"
 $RegistryName = "Scriptforge.powershell.$outputScriptName"
-$Version = "v0.2.0-pre"
+$Version = "v0.2.1"
 
 #二、初始化
 
