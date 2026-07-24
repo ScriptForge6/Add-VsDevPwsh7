@@ -1,4 +1,4 @@
-<center>
+<div align="center">
 
 # Add-VsDevPwsh7
 
@@ -8,7 +8,7 @@ PowerShell 7 Developer Terminal for Visual Studio
 
  English | [简体中文](README_CN.md)
 
-</center>
+</div>
 
 ## ✨ Introduction
 The official Visual Studio Developer Terminal only provides CMD / PowerShell 5.1.
